@@ -64,6 +64,11 @@ class Game:
         self.winner: Optional[Faction] = None
         self.win_reason = ""
         self.inspect_count = 0          # 用于 1/3 反转节律
+        # 兜底遥测：模型返回垃圾时引擎会静默随机兜底，这里把它计出来
+        self.decision_count = 0
+        self.fallback_count = 0
+        self.fallback_by_kind: dict[str, int] = {}
+        self._cur_kind = ""
         self.vote_history: list[dict] = []
         self.players: list[Player] = self._setup_players()
 
@@ -137,7 +142,18 @@ class Game:
         return out
 
     def ask(self, req: DecisionRequest) -> Any:
+        self.decision_count += 1
+        self._cur_kind = req.kind
         return self.agent_fn(req)
+
+    def _note_fallback(self, kind: str) -> None:
+        """记一次兜底。模型抽风时对局会静默退化成随机，必须能被看见。"""
+        self.fallback_count += 1
+        self.fallback_by_kind[kind] = self.fallback_by_kind.get(kind, 0) + 1
+
+    @property
+    def fallback_rate(self) -> float:
+        return self.fallback_count / self.decision_count if self.decision_count else 0.0
 
     # ---------- 夜晚 ----------
 
@@ -389,6 +405,8 @@ class Game:
             options=self.alive_seats(),
         )
         text = self.ask(req)
+        if not text or str(text).startswith("[通讯中断"):
+            self._note_fallback(kind)
         if text:
             self.log(kind, str(text), actor=p.seat)
 
@@ -503,6 +521,17 @@ class Game:
         self.log("system", f"【对局结束】{reason}", winner=faction.value)
         roster = "、".join(f"{p.label}={p.role_cn}" for p in self.players)
         self.log("system", f"身份公开：{roster}")
+        if self.fallback_count:
+            detail = "、".join(
+                f"{k}×{v}" for k, v in sorted(self.fallback_by_kind.items())
+            )
+            self.log(
+                "system",
+                f"[兜底统计] {self.fallback_count}/{self.decision_count} 次决策未能采纳模型返回值"
+                f"（{self.fallback_rate:.1%}），已随机兜底：{detail}",
+                fallback_count=self.fallback_count,
+                decision_count=self.decision_count,
+            )
 
     # ---------- 主循环 ----------
 
@@ -533,6 +562,7 @@ class Game:
             return None
         if n in options:
             return n
+        self._note_fallback(self._cur_kind or "seat")
         return self.rng.choice(options) if options else None
 
     def snapshot(self) -> dict:
@@ -541,6 +571,10 @@ class Game:
             "phase": self.phase.value,
             "winner": self.winner.value if self.winner else None,
             "win_reason": self.win_reason,
+            "decisions": self.decision_count,
+            "fallbacks": self.fallback_count,
+            "fallback_rate": round(self.fallback_rate, 4),
+            "fallback_by_kind": dict(self.fallback_by_kind),
             "players": [
                 {
                     "seat": p.seat,

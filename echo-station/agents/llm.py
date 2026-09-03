@@ -5,6 +5,8 @@
   LLM_API_KEY
   LLM_MODEL      例如 deepseek-chat / gpt-4o-mini / qwen2.5:14b
   LLM_MOCK=1     使用本地假回复，不调用网络
+  LLM_TIMEOUT    单次请求超时秒数，默认 30
+  LLM_RETRIES    单次请求重试次数，默认 1
 """
 from __future__ import annotations
 
@@ -22,18 +24,28 @@ class LLMClient:
         model: Optional[str] = None,
         mock: Optional[bool] = None,
         temperature: float = 0.9,
+        timeout: Optional[float] = None,
+        max_retries: Optional[int] = None,
     ):
         self.base_url = base_url or os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
         self.api_key = api_key or os.getenv("LLM_API_KEY", "")
         self.model = model or os.getenv("LLM_MODEL", "gpt-4o-mini")
         self.temperature = temperature
+        # 不设超时的话，端点挂起会让整局永远卡住
+        self.timeout = float(os.getenv("LLM_TIMEOUT", "30")) if timeout is None else timeout
+        self.max_retries = int(os.getenv("LLM_RETRIES", "1")) if max_retries is None else max_retries
         if mock is None:
             mock = os.getenv("LLM_MOCK", "").strip() in ("1", "true", "yes") or not self.api_key
         self.mock = mock
         self._client = None
         if not self.mock:
             from openai import OpenAI
-            self._client = OpenAI(base_url=self.base_url, api_key=self.api_key)
+            self._client = OpenAI(
+                base_url=self.base_url,
+                api_key=self.api_key,
+                timeout=self.timeout,
+                max_retries=self.max_retries,
+            )
 
     def chat(
         self,
