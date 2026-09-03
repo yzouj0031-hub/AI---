@@ -42,6 +42,18 @@ class Event:
 if(zoneOf(q.x,q.y)===z && Math.hypot(q.x-p.x,q.y-p.y)<vision()) saw.push(q.id);
 ```
 
+**行为层同样受这条约束**。船员的怀疑度只从 `a.log`（它自己的日记）里算，
+盯梢的"最后目击点"只在 `canSee(a,tgt)` 为真时才刷新：
+
+```js
+// chaseStep() —— 看不见还去追新位置，等于读了它不该有的坐标
+if(!canSee(a,tgt))staleWrite++;   // 恒为 0；改坏了 test_meeting.py 会抓到
+a.chase=tgt.id; a.cx=tgt.x; a.cy=tgt.y;
+```
+
+想让 AI 更聪明的时候，最省事的写法永远是直接读 `P[i].x/y`。别这么干。
+追到最后目击点然后扑空，是**对的**行为；实时跟踪一个看不见的人不是。
+
 **如果你要加功能**：任何时候都不要图省事，直接把全局状态塞进 prompt。
 一旦 AI 能看到它不该看到的东西，整个游戏的推理就变成了表演。
 `tests/test_invariants.py` 里的 `test_isolation` 会抓这个，改动后务必跑。
@@ -56,6 +68,16 @@ if(zoneOf(q.x,q.y)===z && Math.hypot(q.x-p.x,q.y-p.y)<vision()) saw.push(q.id);
 
 新增任何模型调用点，都要走这两个函数，不要直接 `int(resp)` 或 `JSON.parse(resp)`。
 `test_malformed` 用 400 局垃圾输入压测这一点。
+
+**但兜底必须留下痕迹**。模型抽风时对局不会报错，只会静默退化成随机，
+从输出上看不出来。所以 echo-station 里每次兜底都要经过 `Game._note_fallback()`：
+
+```python
+self._note_fallback(self._cur_kind or "seat")   # _coerce_seat 里
+```
+
+新增兜底分支时记得也调它，否则遥测会漏报。`test_agents.py` 会检查
+垃圾端点下兜底率显著偏高、正常 agent 下恒为 0（不误报）。
 
 ## 第三条：模型挂了游戏也要能玩
 
@@ -73,9 +95,15 @@ if(zoneOf(q.x,q.y)===z && Math.hypot(q.x-p.x,q.y-p.y)<vision()) saw.push(q.id);
 ```bash
 cd echo-station
 LLM_MOCK=1 python run_cli.py          # 不花钱跑一局
-python tests/test_invariants.py       # 跑测试（约 1-2 分钟）
+python tests/test_invariants.py       # 引擎不变量（约 1-2 分钟）
+python tests/test_agents.py           # agent 层 + 真实 HTTP 路径
+python tests/test_web.py              # 观战服务
 uvicorn web.server:app --port 8100    # Web 观战
 ```
+
+三个测试文件对应三层，改哪层跑哪个，**改 agents/ 一定要跑 test_agents.py**：
+它是唯一会检查"送进模型的 prompt 里有没有越权信息"的地方——
+`test_invariants.py` 验的是 `visible_events()`，prompt 拼装那层手滑它抓不到。
 
 **架构**：引擎是同步阻塞状态机，通过 `agent_fn(DecisionRequest) -> Any` 单一入口
 向外索取决策。它不知道对面是 LLM、规则、还是人类。
@@ -88,6 +116,12 @@ Game.run()
 ```
 
 **要加人类玩家**：`agent_fn` 是唯一入口，按 `req.seat` 分流即可，引擎不用改。
+
+**观战服务是一对多的**。`Session` 给每个 WebSocket 连接发一个独立队列，
+`publish()` 扇出给所有订阅者。早期版本所有连接共用一个 `queue.Queue`，
+两个观众会把事件瓜分掉，谁都看不到完整对局。
+加新的推送时用 `session.publish()`，不要直接往某个队列里塞。
+`test_web.py` 会用两个真 WebSocket 检查事件流逐条一致。
 
 **要加角色**：在 `models.py` 加 `Role` 和 `ROLE_FACTION` 映射，
 在 `game.py` 的 `run_night()` 里加结算分支，在 `player_agent.py` 的 `ROLE_BRIEF` 里写角色 prompt。

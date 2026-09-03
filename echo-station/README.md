@@ -78,11 +78,34 @@ LLM 会返回空字符串、`"我觉得是3号但也可能是5号"`、markdown �
 ## 测试
 
 ```bash
-python tests/test_invariants.py    # 约 1-2 分钟
+python tests/test_invariants.py    # 引擎不变量，约 1-2 分钟
+python tests/test_agents.py        # agent 层 + 真实 HTTP 路径，约 1 分钟
+python tests/test_web.py           # 观战服务，约 1 分钟
 ```
 
-四项不变量：胜负判定一致性、信息隔离（7.6 万次可见性检查）、
-畸形输入健壮性（400 局垃圾输入）、平衡性对推理能力的敏感度。
+三个文件分别守着三层，全程本地、不联网、不花钱：
+
+| 文件 | 覆盖 | 关键用例 |
+|---|---|---|
+| `test_invariants.py` | 引擎 | 胜负一致性、信息隔离（7.6 万次可见性检查）、400 局畸形输入、平衡性敏感度 |
+| `test_agents.py` | agent 层 | 起一个假 OpenAI 端点跑真 HTTP；**校验送进模型的 prompt 不含越权信息**；端点吐垃圾/全 500 时的降级与兜底计数 |
+| `test_web.py` | 观战服务 | 两个观众事件流逐条一致、中途接入补历史、退订清理 |
+
+`test_agents.py` 里最要紧的是 prompt 越权那一条：`test_invariants.py` 验的是
+`visible_events()`，但真正送进模型的是 `system_prompt()` 拼出来的字符串——
+拼装那一层手滑，引擎层的隔离测试是抓不到的。
+
+## 兜底遥测
+
+模型抽风时引擎会随机兜底，对局会**静默**退化成随机——不报错，只是变蠢。
+所以每局都会统计有多少次决策没能采纳模型返回值：
+
+```
+[兜底统计] 51/312 次决策未能采纳模型返回值（16.3%），已随机兜底：vote×22、night_purge×11、...
+```
+
+也在 `Game.snapshot()` 的 `fallback_rate` / `fallback_by_kind` 字段里，
+CLI 和 Web 都读得到。兜底率突然飙高，基本就是端点出问题了，而不是模型变笨了。
 
 ## 平衡性数据
 
