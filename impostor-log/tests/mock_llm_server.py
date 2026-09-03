@@ -24,6 +24,10 @@ class H(BaseHTTPRequestHandler):
         sysmsg=body['messages'][0]['content']
         if '测试助手' in sysmsg:
             out='就绪'
+        elif sysmsg.startswith('[watch]'):
+            d=json.loads(user)
+            others=[x for x in d.get('alive',[]) if x!=d.get('you')]
+            out='```json\n'+json.dumps({"watch":(0 if 0 in others else (others[0] if others else None))})+'\n```'
         elif 'verdict' in sysmsg:
             out='```json\n'+json.dumps({"verdict":"contradict",
                 "line":"不对，t=12.5s 我在电力室看见你了，你说你在导航室？",

@@ -81,7 +81,9 @@ async def play(pg, cfg, claim="我一直在导航室做接线"):
 
     lines = await pg.eval_on_selector_all("#ovLog .say", "e=>e.map(x=>x.textContent)")
     tally = await pg.eval_on_selector_all("#ovLog .tag", "e=>e.map(x=>x.textContent)")
-    return {"killed": killed, "typed": typed, "lines": lines, "tally": tally}
+    behav = await pg.evaluate("()=>window.__dbg()")
+    return {"killed": killed, "typed": typed, "lines": lines,
+            "tally": tally, "behav": behav}
 
 
 async def main() -> int:
@@ -106,6 +108,12 @@ async def main() -> int:
             check(r["typed"], "自由打字输入框可用")
             check(len(r["lines"]) >= 5, f"会议产生了发言（{len(r['lines'])} 条）")
             check(len(r["tally"]) >= 2, f"投票正常结算（{len(r['tally'])} 票）")
+            b = r["behav"]
+            check(max(b["sus"]) > 0,
+                  f"行为层：船员对你积累了怀疑度（{[round(x, 1) for x in b['sus']]}）")
+            check(b["chases"] > 0, f"行为层：盯梢真的发生了（{b['chases']} 次）")
+            check(b["staleWrite"] == 0 and not b["overBudget"],
+                  "行为层：最后目击点只在看得见时刷新，且盯梢预算有上限")
             check(not errs, f"无 JS 异常{'：' + str(errs[:2]) if errs else ''}")
             await pg.close()
         await browser.close()

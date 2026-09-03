@@ -215,7 +215,8 @@ const NM=['紫(你)','红','蓝','绿','黄'];
 const P=[];
 for(let i=0;i<5;i++){const st=rooms[1];
   P.push({id:i,name:NM[i],col:COL[i],x:st.cx+(i-2)*36,y:st.cy+(i%2?26:-18),
-    alive:!0,imp:i===0,log:[],path:[],mt:null,tasks:[],cur:null,tt:0,tmax:1,doing:!1,fixing:!1,goal:1});}
+    alive:!0,imp:i===0,log:[],path:[],mt:null,tasks:[],cur:null,tt:0,tmax:1,doing:!1,fixing:!1,goal:1,
+    sus:{},susIdx:0,chase:null,cx:0,cy:0,chBud:8});}
 const ME=P[0];
 const TASKT=14, AISPD=112, KCD=12;
 function claimSpot(a){let best=null,bd=1e9;
@@ -269,13 +270,14 @@ function step(dt){
     else {ME.tt-=dt; if(ME.tt<=0){ME.doing=!1;note('假装完成一个任务');}} }
   else if(ME.doing&&(moving||!spot)) ME.doing=!1;
   for(let i=1;i<5;i++){const a=P[i]; if(a.alive) ai(a,dt);}
-  logT+=dt; if(logT>=.5){logT=0;sample();}
+  logT+=dt; if(logT>=.5){logT=0;sample();updateSus();nudge(.5);}
   ui();
   if(P.filter(p=>p.alive&&!p.imp).length<=1) end(!0,'船员只剩一个了。刀完收工。');
   if(taskDone>=taskTotal) end(!1,'任务条满了。他们不用抓到你也能赢。');
 }
 
 function ai(a,dt){
+  if(chaseStep(a,dt)) return;
   // 紧急情况优先
   if(emg&&!a.fixing){a.fixing=!0;a.doing=!1;a.tt=0;a.mt=null;release(a.id);a.cur=null;a.goal=emgRoom;a.path=path(nearNode(a),emgRoom);}
   if(!emg&&a.fixing){a.fixing=!1;a.path=[];a.mt=null;}
@@ -320,6 +322,81 @@ function sample(){
       if(zoneOf(q.x,q.y)===z&&Math.hypot(q.x-p.x,q.y-p.y)<vision()){saw.push(q.id); if(q.doing)tk.push(q.id);}}
     p.log.push({t:+t.toFixed(1),room:z?z.name:'?',saw,tk,dark:emg===1||undefined});}
 }
+/* ---------- 行为层：怀疑度驱动的盯梢 ----------
+   船员在地图上的行动也要建立在受限信息之上：怀疑度只从自己的日记里长出来，
+   盯梢只在此刻真的看得见目标时才更新位置。任何时候都不要读别人的坐标。 */
+const SUS_FOLLOW=6, CH_BUD=8;
+let chases=0, staleWrite=0;   /* 供端到端测试观察 */
+function canSee(a,q){return q.alive&&zoneOf(q.x,q.y)===zoneOf(a.x,a.y)&&Math.hypot(q.x-a.x,q.y-a.y)<vision();}
+
+function updateSus(){
+  for(const a of P){
+    if(!a.alive||a.imp)continue;
+    // 逐条消费尚未折算过的日记。击杀那条是 bKill 直接追加的，
+    // 只看最后一条的话会被随后的 sample() 盖掉，铁证就永远不触发。
+    if(a.susIdx===undefined)a.susIdx=0;
+    for(let i=Math.max(1,a.susIdx);i<a.log.length;i++){
+      const cur=a.log[i],prev=a.log[i-1];
+      if(cur.kill){ a.sus[cur.saw[0]]=99; continue; }   // 亲眼看见动手，顶满
+      for(const id of cur.saw){
+        // 蹲在任务点上 = 洗清；在场却什么都不干 = 慢慢可疑
+        if(cur.tk.includes(id)) a.sus[id]=Math.max(0,(a.sus[id]||0)-1.2);
+        else a.sus[id]=(a.sus[id]||0)+0.5;
+        if(cur.dark) a.sus[id]=(a.sus[id]||0)+0.4;
+      }
+      // 我没挪窝，人却凭空没了 —— 可能钻了管道
+      if(cur.room===prev.room&&!prev.kill) for(const id of prev.saw)
+        if(!cur.saw.includes(id)) a.sus[id]=(a.sus[id]||0)+1.5;
+    }
+    a.susIdx=a.log.length;
+  }
+}
+
+/* 端到端测试用的观察窗口（只读，不影响对局） */
+window.__dbg=()=>({
+  sus:P.slice(1).map(a=>a.sus[0]||0),
+  chases,
+  staleWrite,                                     // 越权写入最后目击点的次数，必须为 0
+  overBudget:P.slice(1).some(a=>a.chase!==null&&a.chBud<=0),
+});
+
+function chaseTarget(a){
+  let best=null,bs=SUS_FOLLOW;
+  for(const q of P){ if(q===a||!q.alive)continue;
+    const v=a.sus[q.id]||0;
+    if(v>=bs&&canSee(a,q)){bs=v;best=q;} }
+  return best;
+}
+
+/* 盯梢步进。返回 true 表示这一帧被盯梢接管，不再走任务逻辑。 */
+function chaseStep(a,dt){
+  if(a.fixing){a.chase=null;return !1;}
+  const tgt=chaseTarget(a);
+  if(tgt&&a.chBud>0){
+    if(a.cur!==null){release(a.id);a.cur=null;}
+    if(a.chase!==tgt.id)chases++;
+    // 最后目击点只在此刻真的看得见时才刷新。看不见还去追新位置＝读了它不该有的坐标。
+    if(!canSee(a,tgt))staleWrite++;            // 恒为 0；改坏了这里测试会抓到
+    a.chase=tgt.id; a.cx=tgt.x; a.cy=tgt.y;
+  }
+  if(a.chase===null){ a.chBud=Math.min(CH_BUD,a.chBud+dt*.5); return !1; }
+  a.chBud-=dt;
+  if(a.chBud<=0){                               // 盯梢预算耗尽：回去干活，别让任务条卡死
+    a.sus[a.chase]=Math.min(a.sus[a.chase]||0,SUS_FOLLOW-1);
+    a.chase=null; a.path=[]; a.mt=null; return !1;
+  }
+  a.path=[]; a.mt=null; a.doing=!1; a.tt=0;
+  const dx=a.cx-a.x,dy=a.cy-a.y,d=Math.hypot(dx,dy);
+  if(d<30){ if(!tgt){a.chase=null;} return !0; } // 摸到最后目击点还是没人 → 放弃
+  const sp=Math.min(d,AISPD*dt);
+  const nx=a.x+dx/d*sp, ny=a.y+dy/d*sp;
+  let moved=!1;
+  if(canStand(nx,a.y)){a.x=nx;moved=!0;}
+  if(canStand(a.x,ny)){a.y=ny;moved=!0;}
+  if(!moved) a.chBud-=dt*3;                     // 撞墙就快点放弃，别卡住
+  return !0;
+}
+
 function witnesses(){const z=zoneOf(ME.x,ME.y),out=[];
   for(let i=1;i<5;i++){const a=P[i];
     if(a.alive&&zoneOf(a.x,a.y)===z&&Math.hypot(a.x-ME.x,a.y-ME.y)<vision())out.push(a);} return out;}
@@ -498,6 +575,28 @@ function grabJSON(s){
   return null;
 }
 badge();
+
+/* 行为层意图：每 9 秒问一次模型「现在该盯住谁」，只喂它自己的日记。
+   模型不可用/回复不合法 → 完全不动怀疑度，规则层照常工作（降级路径）。 */
+const SYS_WATCH='[watch] 你在玩一局太空狼人杀，你是船员。下面是你自己的目击日记，别人的日记你看不到。'
+ +'内鬼做不了真任务（tk 里不会有他），也可能从你眼前凭空消失。判断你现在最该盯住谁。'
+ +'只输出 JSON：{"watch": 玩家编号或 null}。不要输出任何别的内容。';
+let nudgeT=0,nudgeBusy=!1;
+function nudge(dt){
+  if(!hasLLM()||meeting||over)return;
+  nudgeT+=dt; if(nudgeT<9||nudgeBusy)return;
+  nudgeT=0; nudgeBusy=!0;
+  const crew=P.filter(p=>p.alive&&!p.imp);
+  Promise.all(crew.map(async a=>{
+    const d={you:a.id,alive:P.filter(p=>p.alive).map(p=>p.id),memory:a.log.slice(-24)};
+    const r=await callLLM(JSON.stringify(d),SYS_WATCH,120,12000).catch(()=>({ok:!1}));
+    if(!r.ok)return;
+    const j=grabJSON(r.text); if(!j)return;
+    const w=Number(j.watch);
+    if(!Number.isInteger(w)||w===a.id||w<0||w>=P.length||!P[w].alive)return;
+    a.sus[w]=(a.sus[w]||0)+3;        // 有界推动，不接管规则层
+  })).catch(()=>{}).finally(()=>{nudgeBusy=!1;});
+}
 
 /* ---------- 会议 ---------- */
 const ov=document.getElementById('ov'),ovLog=document.getElementById('ovLog'),ovC=document.getElementById('ovC');
