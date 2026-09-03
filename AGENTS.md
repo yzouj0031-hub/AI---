@@ -135,8 +135,14 @@ Game.run()
 ```bash
 cd impostor-log
 python -m http.server 8000      # 打开 index.html 即可玩
-python tests/test_meeting.py    # 浏览器端到端测试（需要 playwright）
+python tests/test_meeting.py    # 会议流程端到端测试（需要 playwright）
+python tests/test_mobile.py     # 手机 / 平板适配（5 种视口 + 触摸 + 键盘 + PWA）
 ```
+
+**摇杆的几何不要写死。** 早期版本把中心 52、半径 42、旋钮偏移 31 直接写在
+`mv()` 里——那三个数只对 104px 的摇杆成立，横屏想把摇杆缩小就会失灵。
+现在全部由 `stickGeo()` 从实际尺寸算出来，CSS 里随便改大小都不用动 JS。
+`test_mobile.py` 会在 5 种尺寸下真的拖一次摇杆，确认角色位移一致。
 
 单文件，无构建、无依赖。右上角「AI」按钮填 OpenAI 兼容端点。
 

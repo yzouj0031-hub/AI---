@@ -109,11 +109,32 @@ python -m http.server 8000
 2. 仍失败 → 切备用端点
 3. 全挂 → 回落到规则 AI，并在会议里明说「⚠ 模型没能应答，本轮改用内置规则」
 
+## 手机 / 平板
+
+这个游戏本来就是按手机设计的（摇杆 + 触摸），横屏竖屏都能玩。
+
+**推荐用法：在手机浏览器打开线上地址 → 分享 → 添加到主屏幕。**
+之后从主屏幕图标进入是全屏运行的，没有地址栏，跟原生 App 一样。
+
+已覆盖的适配（`tests/test_mobile.py` 会逐一检查）：
+
+| | 处理 |
+|---|---|
+| 手机横屏 | 竖排会把地图压成一条（实测 iPhone 横屏画布只剩 134px 高）。横屏改成「地图占左、控件收进右侧竖栏」 |
+| 平板 | ≥700px 时摇杆和按钮同步放大，拇指不用去够小目标 |
+| 摇杆 | 几何全部按实际尺寸算，CSS 里改大小不用动 JS；各尺寸下满偏速度一致 |
+| 键盘遮挡 | 辩解输入框曾被软键盘盖住。现在会议面板跟随 `visualViewport` 收窄 |
+| 地址栏伸缩 | 用 `100dvh`，页面不再跟着地址栏跳动 |
+
+`manifest.webmanifest` 和三个图标只在联网托管时才用得上，
+**`index.html` 本身仍然可以单独双击打开就玩**，没有构建、没有依赖。
+
 ## 测试
 
 ```bash
 pip install playwright && playwright install chromium
-python tests/test_meeting.py
+python tests/test_meeting.py     # 会议流程 / failover / 规则降级 / 行为层
+python tests/test_mobile.py      # 5 种手机平板视口：布局、触摸摇杆、键盘、主屏幕安装
 ```
 
 自动拉起假 LLM 端点，验证三条路径：正常调用、主端点 500 切备用、无配置走规则。
@@ -127,6 +148,10 @@ python tests/test_meeting.py
 ```
 index.html                      游戏本体（唯一需要的文件）
 docs-original-rulesonly.html    接模型之前的纯规则版本，留作对照
+manifest.webmanifest            「添加到主屏幕」用，游戏本身不依赖它
+icon-192/512.png                主屏幕图标（含 maskable）
+apple-touch-icon.png            iOS 主屏图标
 tests/mock_llm_server.py        假 OpenAI 端点（含行为层 [watch] 分支）
+tests/test_mobile.py            手机 / 平板适配测试
 tests/test_meeting.py           浏览器端到端测试
 ```

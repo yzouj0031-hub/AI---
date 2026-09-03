@@ -1,0 +1,18 @@
+{
+  "name": "目击日记 · 内鬼推理",
+  "short_name": "目击日记",
+  "description": "Among Us 式的太空社交推理：你是内鬼，四个 AI 船员各记各的目击日记，开会时拿日记和你的说辞逐条对账。",
+  "start_url": ".",
+  "scope": ".",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#0d121c",
+  "theme_color": "#0d121c",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -4,6 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>目击日记 · 内鬼推理</title>
+<!-- 「添加到主屏幕」后全屏运行，没有浏览器地址栏。这几个文件只在联网托管时才用得上，
+     index.html 本身仍然可以单独双击打开就玩。 -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png" type="image/png">
+<meta name="theme-color" content="#0d121c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="目击日记">
 <style>
   :root{
     --bg:#0d121c; --panel:#141c2a; --panel2:#1b2536; --line:#2c3a52;
@@ -12,6 +22,8 @@
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%}
+  /* 手机地址栏伸缩时 100% 会跳动，dvh 更稳（不支持就退回上面那行） */
+  @supports (height:100dvh){ html,body{height:100dvh} }
   body{background:var(--bg);color:var(--ink);
     font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
     display:flex;flex-direction:column;overflow:hidden;user-select:none}
@@ -47,6 +59,28 @@
   button.wide{grid-column:1/-1}
   button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
   .cd{font-size:10.5px;font-weight:400;color:var(--dim);display:block;margin-top:1px}
+  /* 手机横屏：竖直堆叠会把地图压成一条（实测 iPhone 横屏画布只剩 134px 高）。
+     改成「地图占左、控件收进右侧竖栏」。 */
+  @media (orientation:landscape) and (max-height:600px){
+    /* 用 grid 显式指定，flex-wrap 在这里分配不出想要的剩余高度 */
+    body{display:grid;grid-template-columns:1fr 250px;grid-template-rows:auto auto 1fr;
+      grid-template-areas:"hud hud" "tbar tbar" "stage ctrl"}
+    .hud{grid-area:hud} .tbar{grid-area:tbar}
+    .stage{grid-area:stage;min-width:0;min-height:0}
+    .ctrl{grid-area:ctrl;flex-direction:column;align-items:stretch;min-height:0;
+      border-top:0;border-left:1px solid var(--line);gap:8px;padding:8px 10px 10px;overflow-y:auto}
+    .ctrl .stick{align-self:center;width:88px;height:88px}
+    .ctrl .stick i{width:36px;height:36px;left:26px;top:26px}
+    .acts{flex:1;align-content:start}
+    button{font-size:13px;padding:7px 4px}
+    .cd{font-size:10px}
+  }
+  /* 平板竖屏地方大，摇杆和按钮跟着放大，别让拇指去够小目标 */
+  @media (min-width:700px){
+    .stick{width:128px;height:128px}
+    .stick i{width:52px;height:52px;left:38px;top:38px}
+    button{font-size:16px;padding:12px 6px}
+  }
   .overlay{position:fixed;inset:0;background:rgba(6,9,15,.95);display:none;flex-direction:column;z-index:9}
   .overlay.show{display:flex}
   .ohead{padding:12px 14px;border-bottom:1px solid var(--line)}
@@ -235,11 +269,17 @@ const stick=document.getElementById('stick'),knob=document.getElementById('knob'
 let sid=null;
 stick.addEventListener('pointerdown',e=>{sid=e.pointerId;stick.setPointerCapture(sid);mv(e);});
 stick.addEventListener('pointermove',e=>{if(e.pointerId===sid)mv(e);});
-const rel=()=>{sid=null;vx=vy=0;knob.style.left='31px';knob.style.top='31px';};
+/* 摇杆几何全部从实际尺寸算，CSS 里改大小不用动 JS */
+const stickGeo=()=>{const b=stick.getBoundingClientRect(),kr=knob.offsetWidth/2||21;
+  return {R:b.width/2, kr, max:Math.max(1,b.width/2-kr), left:b.left, top:b.top};};
+const rel=()=>{sid=null;vx=vy=0;const g=stickGeo();
+  knob.style.left=(g.R-g.kr)+'px';knob.style.top=(g.R-g.kr)+'px';};
 stick.addEventListener('pointerup',rel); stick.addEventListener('pointercancel',rel);
-function mv(e){const b=stick.getBoundingClientRect();let dx=e.clientX-b.left-52,dy=e.clientY-b.top-52;
-  const d=Math.hypot(dx,dy)||1,m=Math.min(d,42);dx=dx/d*m;dy=dy/d*m;
-  knob.style.left=(31+dx)+'px';knob.style.top=(31+dy)+'px';vx=dx/42;vy=dy/42;}
+function mv(e){const g=stickGeo();
+  let dx=e.clientX-g.left-g.R, dy=e.clientY-g.top-g.R;
+  const d=Math.hypot(dx,dy)||1, m=Math.min(d,g.max); dx=dx/d*m; dy=dy/d*m;
+  knob.style.left=(g.R-g.kr+dx)+'px'; knob.style.top=(g.R-g.kr+dy)+'px';
+  vx=dx/g.max; vy=dy/g.max;}
 const keys={};
 addEventListener('keydown',e=>keys[e.key.toLowerCase()]=1);
 addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
@@ -364,6 +404,7 @@ window.__dbg=()=>({
   chases,
   staleWrite,                                     // 越权写入最后目击点的次数，必须为 0
   overBudget:P.slice(1).some(a=>a.chase!==null&&a.chBud<=0),
+  me:[Math.round(ME.x),Math.round(ME.y)],         // 供触摸操作测试观察
 });
 
 function chaseTarget(a){
@@ -610,6 +651,15 @@ function nudge(dt){
 
 /* ---------- 会议 ---------- */
 const ov=document.getElementById('ov'),ovLog=document.getElementById('ovLog'),ovC=document.getElementById('ovC');
+
+/* 手机上键盘弹出时视觉视口会变矮，但 position:fixed 仍按原高度铺满，
+   结果辩解输入框被键盘盖住、打字看不见自己写了什么。跟着视觉视口调高度。 */
+if(window.visualViewport){
+  const vv=window.visualViewport;
+  const fitOv=()=>{ ov.style.height=vv.height+'px';
+    ov.style.top=(vv.offsetTop||0)+'px'; ov.style.bottom='auto'; };
+  vv.addEventListener('resize',fitOv); vv.addEventListener('scroll',fitOv); fitOv();
+}
 let M=null;
 const slice=(p,a,b)=>p.log.filter(e=>e.t>=a&&e.t<=b);
 
@@ -750,6 +800,8 @@ function askPlayer(){
     inp.disabled=btn.disabled=!0;defend(v);};
   btn.onclick=send;
   inp.addEventListener('keydown',e=>{if(e.key==='Enter')send();});
+  inp.addEventListener('focus',()=>setTimeout(()=>
+    inp.scrollIntoView({block:'nearest',behavior:'smooth'}),250));
   box.appendChild(inp);box.appendChild(btn);
   ovC.appendChild(hint);ovC.appendChild(box);
   setTimeout(()=>inp.focus(),50);

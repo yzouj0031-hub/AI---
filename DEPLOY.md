@@ -51,6 +51,21 @@ _site/
 - **端点必须允许跨域（CORS）。** 不是所有厂商的接口都对浏览器开放；
   被拦时右上角「AI」按钮会变红，游戏自动退回规则 AI，不会卡死
 
+### 手机 / 平板上使用
+
+发布之后直接用手机浏览器打开 `https://yzouj0031-hub.github.io/AI---/impostor-log/`，
+然后 **分享 → 添加到主屏幕**（iOS Safari）或 **菜单 → 安装应用 / 添加到主屏幕**（Android Chrome）。
+
+之后从主屏幕图标进入就是全屏运行，没有地址栏，跟原生 App 一样。
+`manifest.webmanifest` 里 `display` 设的是 `fullscreen`，图标提供了 192 / 512 / maskable 和
+iOS 用的 apple-touch-icon。
+
+`tests/test_mobile.py` 覆盖了 iPhone 竖/横、iPad 竖/横、小安卓机五种视口：
+横屏布局、触摸摇杆真的驱动角色、软键盘不遮挡输入框、图标和 manifest 无 404。
+
+「深空回响」的观战界面在手机上也能看（≤820px 时侧栏自动堆到上方），
+但它是纯观战，没有触摸操作需求。
+
 ---
 
 ## 二、深空回响 → 需要一个能跑 Python 的托管
