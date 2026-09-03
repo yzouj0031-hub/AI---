@@ -1,0 +1,21 @@
+# Render 一键部署：新建 Blueprint 时指向这个仓库即可。
+# 免费实例闲置约 15 分钟会休眠，下次访问要等几十秒冷启动。
+services:
+  - type: web
+    name: echo-station
+    runtime: docker
+    dockerfilePath: ./echo-station/Dockerfile
+    dockerContext: ./echo-station
+    plan: free
+    healthCheckPath: /api/state
+    envVars:
+      - key: LLM_MOCK       # 设为 0 并补上下面三个变量即可接真模型
+        value: "1"
+      - key: GAME_SPEED     # 每条事件之间的停顿(秒)，观众跟得上的节奏
+        value: "1.2"
+      # - key: LLM_BASE_URL
+      #   sync: false       # sync:false = 在 Render 后台手填，不进仓库
+      # - key: LLM_API_KEY
+      #   sync: false
+      # - key: LLM_MODEL
+      #   sync: false
