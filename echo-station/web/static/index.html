@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>深空回响 · ECHO-7</title>
+<style>
+:root{
+  --bg:#05070d; --panel:#0a0f1a; --line:#16243a;
+  --text:#c8d6e8; --dim:#5a6f8c;
+  --cyan:#3ddbd9; --amber:#f5a623; --red:#ff4d5e;
+  --violet:#a06bff; --green:#3ddc84;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:"SF Mono",Menlo,Consolas,"Noto Sans SC",monospace;
+  font-size:14px; line-height:1.65; height:100vh; overflow:hidden;
+}
+/* 星空背景 */
+body::before{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(1px 1px at 20% 30%, #fff6, transparent),
+    radial-gradient(1px 1px at 70% 12%, #fff4, transparent),
+    radial-gradient(1px 1px at 45% 68%, #fff5, transparent),
+    radial-gradient(1px 1px at 88% 55%, #fff3, transparent),
+    radial-gradient(1px 1px at 12% 82%, #fff4, transparent),
+    radial-gradient(1px 1px at 62% 90%, #fff3, transparent),
+    radial-gradient(900px 500px at 78% -10%, #1b3a5511, transparent);
+}
+.wrap{position:relative; z-index:1; display:grid; grid-template-columns:300px 1fr;
+  height:100vh; gap:1px; background:var(--line)}
+@media(max-width:820px){ .wrap{grid-template-columns:1fr; grid-template-rows:auto 1fr} }
+
+/* 左栏 */
+aside{background:var(--panel); padding:16px; overflow-y:auto}
+h1{font-size:15px; letter-spacing:.22em; margin:0 0 2px; color:var(--cyan)}
+.sub{font-size:10.5px; color:var(--dim); letter-spacing:.14em; margin-bottom:16px}
+.ctl{display:flex; gap:8px; margin-bottom:16px}
+button{
+  flex:1; background:transparent; color:var(--cyan); border:1px solid var(--cyan);
+  padding:8px; font-family:inherit; font-size:12px; cursor:pointer;
+  letter-spacing:.1em; transition:.15s;
+}
+button:hover:not(:disabled){background:var(--cyan); color:#04202a}
+button:disabled{opacity:.3; cursor:not-allowed}
+.sec{font-size:10px; color:var(--dim); letter-spacing:.2em;
+  border-bottom:1px solid var(--line); padding-bottom:5px; margin:16px 0 10px}
+
+.crew{display:flex; flex-direction:column; gap:5px}
+.mem{display:flex; align-items:center; gap:9px; padding:6px 8px;
+  border:1px solid transparent; border-left:2px solid var(--line); transition:.2s}
+.mem.act{border-left-color:var(--cyan); background:#3ddbd91a}
+.mem.dead{opacity:.32}
+.mem.dead .nm{text-decoration:line-through}
+.seat{width:19px; height:19px; flex:none; display:grid; place-items:center;
+  border:1px solid var(--dim); font-size:10px; color:var(--dim)}
+.mem.act .seat{border-color:var(--cyan); color:var(--cyan)}
+.nm{font-size:12.5px}
+.rl{font-size:10px; color:var(--amber); margin-left:auto}
+
+/* 右栏 */
+main{background:var(--bg); display:flex; flex-direction:column; overflow:hidden}
+.bar{padding:10px 18px; border-bottom:1px solid var(--line);
+  display:flex; gap:16px; align-items:center; font-size:11px; color:var(--dim);
+  letter-spacing:.1em; background:var(--panel)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--dim);display:inline-block}
+.dot.on{background:var(--green); box-shadow:0 0 8px var(--green)}
+#feed{flex:1; overflow-y:auto; padding:18px 20px}
+.ev{margin-bottom:13px; animation:in .35s ease}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+
+.sys{color:var(--dim); font-size:12px; letter-spacing:.05em; padding:3px 0}
+.sys.hd{color:var(--cyan); border-top:1px solid var(--line);
+  padding-top:11px; margin-top:16px; letter-spacing:.16em}
+.say{border-left:2px solid var(--line); padding-left:11px}
+.who{font-size:11px; color:var(--cyan); letter-spacing:.08em; margin-bottom:2px}
+.txt{color:var(--text)}
+.free{opacity:.82}
+.free .who::after{content:" · 追加"; color:var(--dim); font-size:9px}
+.def{border-left-color:var(--amber)}
+.def .who{color:var(--amber)}
+.def .who::after{content:" · 辩护"; color:var(--dim); font-size:9px}
+.echo{border-left-color:var(--violet); background:#a06bff0d; padding:7px 11px}
+.echo .who{color:var(--violet)}
+.echo .who::after{content:" · 加密频道"; color:var(--dim); font-size:9px}
+.info{border-left-color:var(--green); background:#3ddc840d; padding:7px 11px;
+  color:var(--green); font-size:12.5px}
+.die{color:var(--red); border:1px solid #ff4d5e44; background:#ff4d5e0d;
+  padding:9px 12px; letter-spacing:.03em}
+.vote{color:var(--dim); font-size:12px; padding:1px 0 1px 11px}
+.vote b{color:var(--text); font-weight:400}
+.over{border:1px solid var(--cyan); background:#3ddbd914; padding:14px;
+  color:var(--cyan); margin:18px 0; letter-spacing:.06em}
+#feed::-webkit-scrollbar,aside::-webkit-scrollbar{width:7px}
+#feed::-webkit-scrollbar-thumb,aside::-webkit-scrollbar-thumb{background:var(--line)}
+.hint{color:var(--dim); font-size:11px; line-height:1.8}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside>
+    <h1>深空回响</h1>
+    <div class="sub">ECHO-7 // 观测终端</div>
+    <div class="ctl">
+      <button id="go">开始对局</button>
+    </div>
+    <div class="sec">船 员 名 单</div>
+    <div class="crew" id="crew">
+      <div class="hint">等待对局开始…<br>8 名 AI 船员将各自独立决策。</div>
+    </div>
+    <div class="sec">图 例</div>
+    <div class="hint">
+      <span style="color:var(--violet)">■</span> 回响体密谈（观众可见）<br>
+      <span style="color:var(--green)">■</span> 私密情报<br>
+      <span style="color:var(--red)">■</span> 死亡事件<br>
+      <span style="color:var(--amber)">■</span> 平票辩护
+    </div>
+  </aside>
+
+  <main>
+    <div class="bar">
+      <span><span class="dot" id="dot"></span> <span id="stat">未连接</span></span>
+      <span id="rd">第 0 轮</span>
+      <span id="ph">—</span>
+      <span style="margin-left:auto" id="cnt">存活 8/8</span>
+    </div>
+    <div id="feed">
+      <div class="sys">回响号 ECHO-7 深空科考站 · 观测终端已就绪</div>
+      <div class="sys">距地球 4.2 光年 · 通讯延迟 4.2 年 · 无法请求支援</div>
+      <div class="sys" style="margin-top:10px">点击「开始对局」启动模拟。</div>
+    </div>
+  </main>
+</div>
+
+<script>
+const PHASE = {
+  night:"夜晚", day_brief:"晨间播报", day_speech:"轮次发言",
+  day_free:"自由辩论", day_vote:"冻结投票", day_defense:"辩护",
+  game_over:"对局结束", setup:"准备"
+};
+const feed = document.getElementById('feed');
+const go = document.getElementById('go');
+let ws, atBottom = true;
+
+feed.addEventListener('scroll', () => {
+  atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 60;
+});
+
+function add(html, cls){
+  const d = document.createElement('div');
+  d.className = 'ev ' + (cls||'');
+  d.innerHTML = html;
+  feed.appendChild(d);
+  if (atBottom) feed.scrollTop = feed.scrollHeight;
+}
+const esc = s => String(s??'').replace(/[<>&]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+
+function renderCrew(roster){
+  const box = document.getElementById('crew');
+  box.innerHTML = '';
+  let alive = 0;
+  roster.forEach(p => {
+    if (p.alive) alive++;
+    const el = document.createElement('div');
+    el.className = 'mem' + (p.alive ? '' : ' dead');
+    el.id = 'seat' + p.seat;
+    el.title = p.persona || '';
+    el.innerHTML = `<span class="seat">${p.seat}</span><span class="nm">${esc(p.name)}</span>`;
+    box.appendChild(el);
+  });
+  document.getElementById('cnt').textContent = `存活 ${alive}/${roster.length}`;
+}
+
+function flash(seat){
+  document.querySelectorAll('.mem.act').forEach(e=>e.classList.remove('act'));
+  const el = document.getElementById('seat'+seat);
+  if (el) el.classList.add('act');
+}
+
+function handle(m){
+  if (m.kind === '__roster__'){ renderCrew(m.roster); return; }
+  if (m.kind === '__end__'){
+    go.disabled = false; go.textContent = '再来一局';
+    document.getElementById('dot').classList.remove('on');
+    document.getElementById('stat').textContent = '对局结束';
+    if (m.snapshot) {
+      const rows = m.snapshot.players.map(p =>
+        `${p.seat}号 ${esc(p.name)} — ${esc(p.role_cn)}${p.alive?'':' (出局)'}`).join('<br>');
+      add('<b>最终身份公开</b><br>'+rows, 'over');
+    }
+    return;
+  }
+
+  document.getElementById('rd').textContent = '第 ' + (m.round||0) + ' 轮';
+  document.getElementById('ph').textContent = PHASE[m.phase] || m.phase || '';
+  if (m.actor) flash(m.actor);
+
+  const who = esc(m.actor_label || '');
+  const t = esc(m.text);
+
+  switch(m.kind){
+    case 'speech':
+      add(`<div class="who">${who}</div><div class="txt">${t}</div>`, 'say'); break;
+    case 'free_speech':
+      add(`<div class="who">${who}</div><div class="txt">${t}</div>`, 'say free'); break;
+    case 'defense':
+      add(`<div class="who">${who}</div><div class="txt">${t}</div>`, 'say def'); break;
+    case 'echo_chat':
+      add(`<div class="who">${who}</div><div class="txt">${t}</div>`, 'say echo'); break;
+    case 'info':
+      add(`<div class="who">→ ${who}</div><div>${t}</div>`, 'say info'); break;
+    case 'death':  add(t, 'die'); break;
+    case 'vote':   add(`<b>${t}</b>`, 'vote'); break;
+    default:
+      add(t, 'sys' + (t.includes('——') ? ' hd' : ''));
+  }
+}
+
+function connect(){
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws.onopen  = () => {
+    document.getElementById('dot').classList.add('on');
+    document.getElementById('stat').textContent = '已连接';
+  };
+  ws.onmessage = e => handle(JSON.parse(e.data));
+  ws.onclose = () => {
+    document.getElementById('dot').classList.remove('on');
+    document.getElementById('stat').textContent = '连接断开';
+    setTimeout(connect, 1500);
+  };
+}
+
+go.onclick = async () => {
+  go.disabled = true; go.textContent = '对局进行中';
+  feed.innerHTML = '';
+  const r = await fetch('/api/start', {method:'POST'});
+  const d = await r.json();
+  if (d.roster) renderCrew(d.roster);
+};
+
+connect();
+</script>
+</body>
+</html>
