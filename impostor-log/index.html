@@ -325,7 +325,8 @@ function sample(){
 /* ---------- 行为层：怀疑度驱动的盯梢 ----------
    船员在地图上的行动也要建立在受限信息之上：怀疑度只从自己的日记里长出来，
    盯梢只在此刻真的看得见目标时才更新位置。任何时候都不要读别人的坐标。 */
-const SUS_FOLLOW=6, CH_BUD=8;
+const SUS_FOLLOW=10, SUS_KEEP=6;      // 起停用不同阈值，避免在边界反复横跳
+const CH_BUD=8, CH_START=4;           // 预算耗尽后要攒回 CH_START 才能再起一次盯梢
 let chases=0, staleWrite=0;   /* 供端到端测试观察 */
 function canSee(a,q){return q.alive&&zoneOf(q.x,q.y)===zoneOf(a.x,a.y)&&Math.hypot(q.x-a.x,q.y-a.y)<vision();}
 
@@ -338,15 +339,20 @@ function updateSus(){
     for(let i=Math.max(1,a.susIdx);i<a.log.length;i++){
       const cur=a.log[i],prev=a.log[i-1];
       if(cur.kill){ a.sus[cur.saw[0]]=99; continue; }   // 亲眼看见动手，顶满
+      // 没看见的人慢慢淡出视线：怀疑度不该只涨不跌
+      for(const id in a.sus)
+        if(!cur.saw.includes(+id)) a.sus[id]=Math.max(0,a.sus[id]-0.12);
       for(const id of cur.saw){
-        // 蹲在任务点上 = 洗清；在场却什么都不干 = 慢慢可疑
-        if(cur.tk.includes(id)) a.sus[id]=Math.max(0,(a.sus[id]||0)-1.2);
-        else a.sus[id]=(a.sus[id]||0)+0.5;
-        if(cur.dark) a.sus[id]=(a.sus[id]||0)+0.4;
+        // 蹲在任务点上 = 洗清得很快；在场却什么都不干 = 慢慢可疑。
+        // 两边不对称是有意的：真船员一个任务 14 秒，怀疑度会被压到 0，
+        // 所以只有"被盯着看了十几秒还什么都没干"才够得着阈值。
+        if(cur.tk.includes(id)) a.sus[id]=Math.max(0,(a.sus[id]||0)-2.0);
+        else a.sus[id]=(a.sus[id]||0)+0.4;
+        if(cur.dark) a.sus[id]=(a.sus[id]||0)+0.3;
       }
-      // 我没挪窝，人却凭空没了 —— 可能钻了管道
+      // 我没挪窝，人却凭空没了 —— 可能钻了管道（也可能只是走开了，所以不顶满）
       if(cur.room===prev.room&&!prev.kill) for(const id of prev.saw)
-        if(!cur.saw.includes(id)) a.sus[id]=(a.sus[id]||0)+1.5;
+        if(!cur.saw.includes(id)) a.sus[id]=(a.sus[id]||0)+2.5;
     }
     a.susIdx=a.log.length;
   }
@@ -361,10 +367,12 @@ window.__dbg=()=>({
 });
 
 function chaseTarget(a){
-  let best=null,bs=SUS_FOLLOW;
+  let best=null,bs=0;
   for(const q of P){ if(q===a||!q.alive)continue;
+    // 已经在盯的人用较低的门槛，掉一点就撒手会导致起停抖动
+    const need=(a.chase===q.id)?SUS_KEEP:SUS_FOLLOW;
     const v=a.sus[q.id]||0;
-    if(v>=bs&&canSee(a,q)){bs=v;best=q;} }
+    if(v>=need&&v>bs&&canSee(a,q)){bs=v;best=q;} }
   return best;
 }
 
@@ -372,7 +380,9 @@ function chaseTarget(a){
 function chaseStep(a,dt){
   if(a.fixing){a.chase=null;return !1;}
   const tgt=chaseTarget(a);
-  if(tgt&&a.chBud>0){
+  // 起手要够本钱，续盯只要还有余额——否则预算一见底就重启，会疯狂起停
+  const enough=(a.chase!==null)?(a.chBud>0):(a.chBud>=CH_START);
+  if(tgt&&enough){
     if(a.cur!==null){release(a.id);a.cur=null;}
     if(a.chase!==tgt.id)chases++;
     // 最后目击点只在此刻真的看得见时才刷新。看不见还去追新位置＝读了它不该有的坐标。
