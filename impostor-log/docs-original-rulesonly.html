@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>目击日记 · 内鬼推理</title>
+<style>
+  :root{
+    --bg:#0d121c; --panel:#141c2a; --panel2:#1b2536; --line:#2c3a52;
+    --ink:#dfe6f2; --dim:#8493ab;
+    --amber:#e7a83f; --red:#cf4b3d; --violet:#8663e0; --mint:#4fbf9a;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+    display:flex;flex-direction:column;overflow:hidden;user-select:none}
+  .hud{display:flex;align-items:center;gap:10px;padding:7px 12px 5px;font-size:13px}
+  .hud .room{font-weight:700;letter-spacing:.5px}
+  .hud .sp{flex:1}
+  .chip{color:var(--dim);font-variant-numeric:tabular-nums}
+  .chip b{color:var(--ink);font-weight:600}
+  .eye.on{color:var(--amber)}
+  .tbar{display:flex;align-items:center;gap:8px;padding:0 12px 7px;border-bottom:1px solid var(--line)}
+  .tbar span{font-size:11.5px;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .track{flex:1;height:7px;border-radius:4px;background:#101724;border:1px solid var(--line);overflow:hidden}
+  .track i{display:block;height:100%;background:var(--mint);width:0%;transition:width .35s}
+  .track.hot i{background:var(--amber)}
+  .stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:#0a0e16}
+  canvas{width:100%;height:100%;object-fit:contain;display:block;touch-action:none}
+  .alertline{position:absolute;top:8px;left:0;right:0;text-align:center;font-size:12.5px;color:var(--amber);pointer-events:none;opacity:0;transition:opacity .25s}
+  .alertline.show{opacity:1}
+  .siren{position:absolute;top:0;left:0;right:0;padding:5px;text-align:center;font-size:13px;font-weight:700;
+    background:rgba(207,75,61,.22);color:#ffb3aa;display:none;font-variant-numeric:tabular-nums}
+  .siren.show{display:block}
+  .ctrl{display:flex;align-items:flex-start;gap:10px;padding:9px 12px 12px;border-top:1px solid var(--line)}
+  .stick{width:104px;height:104px;border-radius:50%;border:1px solid var(--line);
+    background:radial-gradient(circle at 50% 50%,#182132,#111927);position:relative;flex:none;touch-action:none}
+  .stick i{position:absolute;width:42px;height:42px;border-radius:50%;left:31px;top:31px;background:#3a4d6e;border:1px solid #55708f}
+  .acts{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  button{font-family:inherit;font-size:14.5px;font-weight:600;color:var(--ink);background:var(--panel2);
+    border:1px solid var(--line);border-radius:10px;padding:9px 5px;cursor:pointer}
+  button:disabled{opacity:.3}
+  button.kill{background:#3a1a1c;border-color:#7d3630;color:#ffb3aa}
+  button.rep{background:#3a2c12;border-color:#7d6224;color:#ffd79a}
+  button.vent{background:#122e2b;border-color:#2a6a5f}
+  button.wide{grid-column:1/-1}
+  button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  .cd{font-size:10.5px;font-weight:400;color:var(--dim);display:block;margin-top:1px}
+  .overlay{position:fixed;inset:0;background:rgba(6,9,15,.95);display:none;flex-direction:column;z-index:9}
+  .overlay.show{display:flex}
+  .ohead{padding:12px 14px;border-bottom:1px solid var(--line)}
+  .ohead h2{margin:0;font-size:16px;letter-spacing:1px}
+  .ohead p{margin:4px 0 0;font-size:12px;color:var(--dim)}
+  .log{flex:1;overflow-y:auto;padding:12px 14px;font-size:14px;line-height:1.55}
+  .say{margin:0 0 10px;opacity:0;animation:in .28s forwards}
+  @keyframes in{to{opacity:1}}
+  .say b{font-weight:700}
+  .say.sys{color:var(--dim);font-size:12.5px;border-left:2px solid var(--line);padding-left:8px}
+  .say.hit{color:#ffb3aa}
+  .say.ok{color:#8fe0c2}
+  .choices{padding:10px 14px 16px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px}
+  .choices button{flex:1 1 44%;font-size:14px;padding:11px 4px}
+  .tallies{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 10px}
+  .tag{font-size:12px;padding:3px 8px;border-radius:99px;border:1px solid var(--line);background:var(--panel)}
+  pre.diary{background:#0a0f18;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:11px;
+    line-height:1.45;overflow-x:auto;color:#9fd0c0;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+  .note{font-size:11.5px;color:var(--dim);margin:6px 0 0}
+  .end{position:fixed;inset:0;background:rgba(6,9,15,.96);display:none;flex-direction:column;align-items:center;
+    justify-content:center;gap:14px;z-index:10;padding:24px;text-align:center}
+  .end.show{display:flex}
+  .end h1{font-size:26px;margin:0;letter-spacing:2px}
+  .end p{margin:0;color:var(--dim);font-size:14px;max-width:30em;line-height:1.6}
+</style>
+</head>
+<body>
+
+<div class="hud">
+  <span class="room" id="hRoom">食堂</span>
+  <span class="sp"></span>
+  <span class="chip">存活 <b id="hAlive">5</b></span>
+  <span class="chip eye" id="hSeen">可见 <b>0</b></span>
+</div>
+<div class="tbar">
+  <span>任务</span>
+  <span class="track" id="trk"><i id="hTask"></i></span>
+  <span id="hTaskN">0 / 27</span>
+</div>
+
+<div class="stage">
+  <canvas id="cv" width="1000" height="670"></canvas>
+  <div class="siren" id="siren"></div>
+  <div class="alertline" id="alert"></div>
+</div>
+
+<div class="ctrl">
+  <div class="stick" id="stick"><i id="knob"></i></div>
+  <div class="acts">
+    <button class="kill" id="bKill" disabled>刀<span class="cd" id="cdKill">冷却 14s</span></button>
+    <button class="rep" id="bRep" disabled>报告<span class="cd">发现尸体</span></button>
+    <button class="vent" id="bVent" disabled>钻管道<span class="cd" id="cdVent">站在通风口</span></button>
+    <button id="bSab">断电<span class="cd" id="cdSab">就绪</span></button>
+    <button class="wide" id="bMelt">反应堆熔毁<span class="cd" id="cdMelt">逼他们放下任务</span></button>
+  </div>
+</div>
+
+<div class="overlay" id="ov">
+  <div class="ohead"><h2 id="ovT">紧急会议</h2><p id="ovS"></p></div>
+  <div class="log" id="ovLog"></div>
+  <div class="choices" id="ovC"></div>
+</div>
+
+<div class="end" id="endS">
+  <h1 id="endT"></h1>
+  <p id="endP"></p>
+  <button onclick="location.reload()" style="padding:12px 28px">再来一局</button>
+</div>
+
+<script>
+(()=>{
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const W=1000,H=670;
+
+/* ---------- 地图 ---------- */
+const RN=['上引擎','食堂','武器室','反应堆','管理室','导航室','下引擎','电力室','护盾室'];
+const rooms=[],corrV=[],corrH=[],solid=[];
+for(let r=0;r<3;r++)for(let c=0;c<3;c++)
+  rooms.push({i:r*3+c,name:RN[r*3+c],x:40+c*350,y:40+r*220,w:220,h:150,cx:150+c*350,cy:115+r*220});
+for(let r=0;r<3;r++)for(let c=0;c<2;c++){const y=115+r*220;
+  corrH.push({x:260+c*350,y:y-32,w:130,h:64}); solid.push({x:220+c*350,y:y-32,w:210,h:64});}
+for(let c=0;c<3;c++)for(let r=0;r<2;r++){const x=150+c*350;
+  corrV.push({x:x-32,y:190+r*220,w:64,h:70}); solid.push({x:x-32,y:150+r*220,w:64,h:150});}
+rooms.forEach(r=>solid.push(r));
+const zones=[...rooms,...corrH.map((c,i)=>({...c,name:'走廊',i:100+i})),...corrV.map((c,i)=>({...c,name:'走廊',i:200+i}))];
+
+const nodes=rooms.map(r=>({x:r.cx,y:r.cy,room:r.i,adj:[]}));
+function link(a,b){nodes[a].adj.push(b);nodes[b].adj.push(a);}
+corrH.forEach((c,k)=>{const r=(k/2|0),cc=k%2,n=nodes.push({x:c.x+65,y:c.y+32,room:-1,adj:[]})-1;
+  link(n,r*3+cc);link(n,r*3+cc+1);});
+corrV.forEach((c,k)=>{const cc=(k/2|0),r=k%2,n=nodes.push({x:c.x+32,y:c.y+35,room:-1,adj:[]})-1;
+  link(n,r*3+cc);link(n,(r+1)*3+cc);});
+function path(a,b){const prev={},q=[a],seen={[a]:1};
+  while(q.length){const n=q.shift(); if(n===b)break;
+    for(const m of nodes[n].adj) if(!seen[m]){seen[m]=1;prev[m]=n;q.push(m);}}
+  const p=[];let n=b; while(n!==a&&prev[n]!==undefined){p.unshift(n);n=prev[n];} return p;}
+
+const VENTS=[[0,6],[7,2],[3,5]];
+const ventPos=i=>{const r=rooms[i];return{x:r.x+r.w-38,y:r.y+r.h-30};};
+function zoneOf(x,y){for(const z of zones) if(x>=z.x&&x<=z.x+z.w&&y>=z.y&&y<=z.y+z.h) return z; return null;}
+function canStand(x,y,r=14){for(const s of solid) if(x>=s.x+r&&x<=s.x+s.w-r&&y>=s.y+r&&y<=s.y+s.h-r) return true; return false;}
+
+/* ---------- 任务点 ---------- */
+const SPOT=[];
+rooms.forEach(r=>{SPOT.push({r:r.i,x:r.x+50,y:r.y+114,owner:-1,done:!1});
+                  SPOT.push({r:r.i,x:r.x+r.w-50,y:r.y+60,owner:-1,done:!1});
+                  SPOT.push({r:r.i,x:r.cx+18,y:r.y+r.h-34,owner:-1,done:!1});});
+
+/* ---------- 角色 ---------- */
+const COL=['#8663e0','#cf4b3d','#3f83d6','#4fbf9a','#e7a83f'];
+const NM=['紫(你)','红','蓝','绿','黄'];
+const P=[];
+for(let i=0;i<5;i++){const st=rooms[1];
+  P.push({id:i,name:NM[i],col:COL[i],x:st.cx+(i-2)*36,y:st.cy+(i%2?26:-18),
+    alive:!0,imp:i===0,log:[],path:[],mt:null,tasks:[],cur:null,tt:0,tmax:1,doing:!1,fixing:!1,goal:1});}
+const ME=P[0];
+const TASKT=14, AISPD=112, KCD=12;
+function claimSpot(a){let best=null,bd=1e9;
+  SPOT.forEach((s,i)=>{if(s.done||s.owner>=0)return;const d=Math.hypot(s.x-a.x,s.y-a.y);
+    if(d<bd){bd=d;best=i;}});
+  if(best!==null)SPOT[best].owner=a.id; return best;}
+function release(id){SPOT.forEach(s=>{if(!s.done&&s.owner===id)s.owner=-1;});}
+
+let bodies=[],t=0,killCD=14,sabCD=20,over=!1,meeting=!1,msgT=0;
+let taskTotal=SPOT.length,taskDone=0;
+let emg=0,emgT=0,emgRoom=7;      /* 1=断电  2=熔毁 */
+
+/* ---------- 输入 ---------- */
+let vx=0,vy=0;
+const stick=document.getElementById('stick'),knob=document.getElementById('knob');
+let sid=null;
+stick.addEventListener('pointerdown',e=>{sid=e.pointerId;stick.setPointerCapture(sid);mv(e);});
+stick.addEventListener('pointermove',e=>{if(e.pointerId===sid)mv(e);});
+const rel=()=>{sid=null;vx=vy=0;knob.style.left='31px';knob.style.top='31px';};
+stick.addEventListener('pointerup',rel); stick.addEventListener('pointercancel',rel);
+function mv(e){const b=stick.getBoundingClientRect();let dx=e.clientX-b.left-52,dy=e.clientY-b.top-52;
+  const d=Math.hypot(dx,dy)||1,m=Math.min(d,42);dx=dx/d*m;dy=dy/d*m;
+  knob.style.left=(31+dx)+'px';knob.style.top=(31+dy)+'px';vx=dx/42;vy=dy/42;}
+const keys={};
+addEventListener('keydown',e=>keys[e.key.toLowerCase()]=1);
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
+
+/* ---------- 主循环 ---------- */
+let last=performance.now(),logT=0;
+function loop(now){const dt=Math.min(.05,(now-last)/1000);last=now;
+  if(!meeting&&!over)step(dt); draw(); requestAnimationFrame(loop);}
+requestAnimationFrame(loop);
+
+function step(dt){
+  t+=dt; killCD=Math.max(0,killCD-dt); sabCD=Math.max(0,sabCD-dt);
+  if(emg){emgT-=dt;
+    const at=P.filter(p=>p.alive&&!p.imp&&zoneOf(p.x,p.y)===rooms[emgRoom]).length;
+    if(at>=(emg===2?2:1)) clearEmg(emg===2?'反应堆稳住了':'电力恢复');
+    else if(emgT<=0){ if(emg===2) return end(!0,'反应堆熔毁。他们全程忙着做任务,没人来得及修。');
+      clearEmg('电力自行恢复');}}
+  // 玩家移动
+  let mx=vx,my=vy;
+  if(keys.a||keys.arrowleft)mx=-1; if(keys.d||keys.arrowright)mx=1;
+  if(keys.w||keys.arrowup)my=-1; if(keys.s||keys.arrowdown)my=1;
+  const moving=Math.hypot(mx,my)>.05, sp=175*dt;
+  const nx=ME.x+mx*sp, ny=ME.y+my*sp;
+  if(canStand(nx,ME.y))ME.x=nx; if(canStand(ME.x,ny))ME.y=ny;
+  // 假装做任务
+  const spot=nearSpot();
+  if(spot&&!moving){ if(!ME.doing){ME.doing=!0;ME.tt=TASKT;ME.tmax=TASKT;}
+    else {ME.tt-=dt; if(ME.tt<=0){ME.doing=!1;note('假装完成一个任务');}} }
+  else if(ME.doing&&(moving||!spot)) ME.doing=!1;
+  for(let i=1;i<5;i++){const a=P[i]; if(a.alive) ai(a,dt);}
+  logT+=dt; if(logT>=.5){logT=0;sample();}
+  ui();
+  if(P.filter(p=>p.alive&&!p.imp).length<=1) end(!0,'船员只剩一个了。刀完收工。');
+  if(taskDone>=taskTotal) end(!1,'任务条满了。他们不用抓到你也能赢。');
+}
+
+function ai(a,dt){
+  // 紧急情况优先
+  if(emg&&!a.fixing){a.fixing=!0;a.doing=!1;a.tt=0;a.mt=null;release(a.id);a.cur=null;a.goal=emgRoom;a.path=path(nearNode(a),emgRoom);}
+  if(!emg&&a.fixing){a.fixing=!1;a.path=[];a.mt=null;}
+  if(a.tt>0){a.tt-=dt;
+    if(a.tt<=0){ if(a.doing&&a.cur!==null){taskDone++;SPOT[a.cur].done=!0;a.cur=null;}
+      a.doing=!1;} return;}
+  if(!a.path.length&&!a.mt){
+    if(a.fixing){const r=rooms[emgRoom];a.mt={x:r.cx+(Math.random()*90-45),y:r.cy+(Math.random()*60-30)};}
+    else{const k=claimSpot(a);
+      if(k!==null){a.cur=k;const s=SPOT[k];a.goal=s.r;
+        a.path=path(nearNode(a),s.r); if(!a.path.length)a.mt={x:s.x,y:s.y};}
+      else{a.cur=null;a.goal=Math.random()*9|0;a.path=path(nearNode(a),a.goal);
+        if(!a.path.length)a.mt={x:rooms[a.goal].cx,y:rooms[a.goal].cy};}}
+  }
+  let tx,ty;
+  if(a.path.length){tx=nodes[a.path[0]].x;ty=nodes[a.path[0]].y;}
+  else if(a.mt){tx=a.mt.x;ty=a.mt.y;} else return;
+  const dx=tx-a.x,dy=ty-a.y,d=Math.hypot(dx,dy);
+  if(d<7){
+    if(a.path.length){a.path.shift();
+      if(!a.path.length){
+        if(a.fixing){const r=rooms[emgRoom];a.mt={x:r.cx+(Math.random()*90-45),y:r.cy+(Math.random()*60-30)};}
+        else if(a.cur!==null){const s=SPOT[a.cur];a.mt={x:s.x,y:s.y};}
+        else {const g=rooms[a.goal];a.mt={x:g.cx+(Math.random()*120-60),y:g.cy+(Math.random()*80-40)};}}}
+    else{a.mt=null;
+      if(a.fixing){} else if(a.cur!==null){a.doing=!0;a.tt=TASKT;a.tmax=TASKT;} else {a.tt=1.6;a.tmax=1.6;}}
+    return;}
+  const s=Math.min(d,AISPD*dt); a.x+=dx/d*s; a.y+=dy/d*s;
+  for(const b of bodies) if(!b.rep&&Math.hypot(b.x-a.x,b.y-a.y)<110&&zoneOf(b.x,b.y)===zoneOf(a.x,a.y)){
+    b.rep=!0; openMeeting(a,b); return;}
+}
+function nearNode(a){let best=0,bd=1e9;
+  nodes.forEach((n,i)=>{const d=Math.hypot(n.x-a.x,n.y-a.y); if(d<bd){bd=d;best=i;}}); return best;}
+function nearSpot(){for(const s of SPOT) if(Math.hypot(s.x-ME.x,s.y-ME.y)<28) return s; return null;}
+
+/* ---------- 目击日记 ---------- */
+const vision=()=>emg===1?130:265;
+function sample(){
+  for(const p of P){ if(!p.alive)continue;
+    const z=zoneOf(p.x,p.y),saw=[],tk=[];
+    for(const q of P){ if(q===p||!q.alive)continue;
+      if(zoneOf(q.x,q.y)===z&&Math.hypot(q.x-p.x,q.y-p.y)<vision()){saw.push(q.id); if(q.doing)tk.push(q.id);}}
+    p.log.push({t:+t.toFixed(1),room:z?z.name:'?',saw,tk,dark:emg===1||undefined});}
+}
+function witnesses(){const z=zoneOf(ME.x,ME.y),out=[];
+  for(let i=1;i<5;i++){const a=P[i];
+    if(a.alive&&zoneOf(a.x,a.y)===z&&Math.hypot(a.x-ME.x,a.y-ME.y)<vision())out.push(a);} return out;}
+
+/* ---------- 行动 ---------- */
+const bKill=document.getElementById('bKill'),bRep=document.getElementById('bRep'),
+      bVent=document.getElementById('bVent'),bSab=document.getElementById('bSab'),bMelt=document.getElementById('bMelt');
+function nearest(){let best=null,bd=1e9;
+  for(let i=1;i<5;i++){const a=P[i];if(!a.alive)continue;const d=Math.hypot(a.x-ME.x,a.y-ME.y);
+    if(d<bd){bd=d;best=a;}} return bd<72?best:null;}
+function nearVent(){for(const v of VENTS)for(const [s,d] of [[v[0],v[1]],[v[1],v[0]]]){
+    const p=ventPos(s); if(Math.hypot(p.x-ME.x,p.y-ME.y)<40) return [s,d];} return null;}
+function nearBody(){for(const b of bodies) if(!b.rep&&Math.hypot(b.x-ME.x,b.y-ME.y)<80) return b; return null;}
+
+bKill.onclick=()=>{const v=nearest(); if(!v||killCD>0)return;
+  v.alive=!1;killCD=KCD;ME.doing=!1;release(v.id);
+  const z=zoneOf(v.x,v.y);
+  bodies.push({x:v.x,y:v.y,id:v.id,t:+t.toFixed(1),room:z?z.name:'?',rep:!1});
+  ME.x=v.x+18;
+  const w=witnesses();
+  w.forEach(a=>a.log.push({t:+t.toFixed(1),room:zoneOf(a.x,a.y).name,saw:[0],tk:[],kill:{v:v.id}}));
+  note(w.length?'有 '+w.length+' 个人看着你动的手':'干净利落，没人看见');};
+bRep.onclick=()=>{const b=nearBody(); if(!b)return; b.rep=!0; openMeeting(ME,b);};
+bVent.onclick=()=>{const v=nearVent(); if(!v)return;
+  const w=witnesses(),p=ventPos(v[1]);
+  w.forEach(a=>a.log.push({t:+t.toFixed(1),room:zoneOf(a.x,a.y).name,saw:[0],tk:[],vent:!0}));
+  ME.x=p.x;ME.y=p.y;ME.doing=!1;
+  note(w.length?'⚠ 被看见钻管道了':'管道转移完成');};
+bSab.onclick=()=>{if(sabCD>0||emg)return;emg=1;emgT=22;emgRoom=7;sabCD=32;
+  note('全船断电：他们的视野被砍半,任务全停');};
+bMelt.onclick=()=>{if(sabCD>0||emg)return;emg=2;emgT=30;emgRoom=3;sabCD=45;
+  note('反应堆过载：他们必须两个人一起来修');};
+function clearEmg(m){emg=0;emgT=0;note(m);}
+function note(s){const el=document.getElementById('alert');el.textContent=s;el.classList.add('show');
+  clearTimeout(msgT);msgT=setTimeout(()=>el.classList.remove('show'),2200);}
+
+function ui(){
+  const z=zoneOf(ME.x,ME.y);
+  document.getElementById('hRoom').textContent=z?z.name:'—';
+  document.getElementById('hAlive').textContent=P.filter(p=>p.alive).length;
+  const w=witnesses(),se=document.getElementById('hSeen');
+  se.querySelector('b').textContent=w.length; se.classList.toggle('on',w.length>0);
+  const pct=taskTotal?taskDone/taskTotal:1;
+  document.getElementById('hTask').style.width=(pct*100)+'%';
+  document.getElementById('hTaskN').textContent=taskDone+' / '+taskTotal;
+  document.getElementById('trk').classList.toggle('hot',pct>=.7);
+  const sr=document.getElementById('siren');
+  sr.classList.toggle('show',emg>0);
+  if(emg)sr.textContent=(emg===2?'反应堆熔毁 ':'断电 ')+emgT.toFixed(0)+'s';
+  const v=nearest();
+  bKill.disabled=!(v&&killCD<=0);
+  document.getElementById('cdKill').textContent=killCD>0?'冷却 '+killCD.toFixed(0)+'s':(v?'目标 '+v.name:'靠近船员');
+  bRep.disabled=!nearBody();
+  const vt=nearVent(); bVent.disabled=!vt;
+  document.getElementById('cdVent').textContent=vt?'通往 '+RN[vt[1]]:'站在通风口';
+  bSab.disabled=sabCD>0||emg>0;
+  bMelt.disabled=sabCD>0||emg>0;
+  const cdtxt=emg?'进行中':(sabCD>0?'冷却 '+sabCD.toFixed(0)+'s':null);
+  document.getElementById('cdSab').textContent=cdtxt||'视野砍半';
+  document.getElementById('cdMelt').textContent=cdtxt||'30s 内没人修 → 你赢';
+}
+
+/* ---------- 绘制 ---------- */
+function ring(x,y,p,col){ctx.strokeStyle='#0e1622';ctx.lineWidth=5;ctx.beginPath();ctx.arc(x,y,23,0,7);ctx.stroke();
+  ctx.strokeStyle=col;ctx.beginPath();ctx.arc(x,y,23,-Math.PI/2,-Math.PI/2+p*Math.PI*2);ctx.stroke();}
+function draw(){
+  ctx.fillStyle='#0a0e16';ctx.fillRect(0,0,W,H);
+  ctx.lineWidth=3;
+  for(const r of rooms){ctx.fillStyle='#141c2a';ctx.fillRect(r.x,r.y,r.w,r.h);
+    ctx.strokeStyle='#2c3a52';ctx.strokeRect(r.x,r.y,r.w,r.h);}
+  ctx.fillStyle='#141c2a';[...corrH,...corrV].forEach(c=>ctx.fillRect(c.x-2,c.y-2,c.w+4,c.h+4));
+  ctx.strokeStyle='#2c3a52';ctx.beginPath();
+  corrH.forEach(c=>{ctx.moveTo(c.x,c.y);ctx.lineTo(c.x+c.w,c.y);ctx.moveTo(c.x,c.y+c.h);ctx.lineTo(c.x+c.w,c.y+c.h);});
+  corrV.forEach(c=>{ctx.moveTo(c.x,c.y);ctx.lineTo(c.x,c.y+c.h);ctx.moveTo(c.x+c.w,c.y);ctx.lineTo(c.x+c.w,c.y+c.h);});
+  ctx.stroke();
+  ctx.fillStyle='#54637d';ctx.font='600 20px sans-serif';ctx.textAlign='center';
+  rooms.forEach(r=>ctx.fillText(r.name,r.cx,r.y+28));
+  // 任务点：菱形，颜色=负责的船员
+  SPOT.forEach(s=>{ if(s.done)return; const live=s.owner>0&&P[s.owner].alive;
+    ctx.save();ctx.translate(s.x,s.y);ctx.rotate(Math.PI/4);
+    ctx.fillStyle=live?P[s.owner].col:'#243043';ctx.globalAlpha=live?.55:.3;
+    ctx.fillRect(-9,-9,18,18);ctx.globalAlpha=1;
+    ctx.strokeStyle=live?P[s.owner].col:'#2c3a52';ctx.lineWidth=2;ctx.strokeRect(-9,-9,18,18);ctx.restore();});
+  // 通风口
+  VENTS.flat().forEach(i=>{const v=ventPos(i);ctx.fillStyle='#2a3d4d';ctx.strokeStyle='#4a7a86';ctx.lineWidth=2;
+    ctx.fillRect(v.x-16,v.y-11,32,22);ctx.strokeRect(v.x-16,v.y-11,32,22);
+    ctx.beginPath();for(let k=-1;k<2;k++){ctx.moveTo(v.x-11,v.y+k*7);ctx.lineTo(v.x+11,v.y+k*7);}ctx.stroke();});
+  if(emg===1){ctx.fillStyle='rgba(4,6,12,.55)';ctx.fillRect(0,0,W,H);}
+  if(emg===2){ctx.fillStyle='rgba(120,20,20,'+(.10+.06*Math.sin(t*6))+')';ctx.fillRect(0,0,W,H);
+    const r=rooms[3];ctx.strokeStyle='#cf4b3d';ctx.lineWidth=4;ctx.strokeRect(r.x,r.y,r.w,r.h);}
+  bodies.forEach(b=>{ctx.fillStyle=COL[b.id];ctx.beginPath();ctx.arc(b.x,b.y,17,Math.PI,0);ctx.fill();
+    ctx.strokeStyle='#0a0e16';ctx.lineWidth=4;ctx.beginPath();
+    ctx.moveTo(b.x-9,b.y-9);ctx.lineTo(b.x+9,b.y+3);ctx.moveTo(b.x+9,b.y-9);ctx.lineTo(b.x-9,b.y+3);ctx.stroke();});
+  const wit=new Set(witnesses().map(a=>a.id));
+  for(const p of P){ if(!p.alive)continue;
+    if(p.doing) ring(p.x,p.y,1-p.tt/p.tmax,p.imp?'#8663e0':'#4fbf9a');
+    if(wit.has(p.id)){ctx.strokeStyle='rgba(231,168,63,.85)';ctx.lineWidth=3;
+      ctx.beginPath();ctx.arc(p.x,p.y,28,0,7);ctx.stroke();}
+    ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(p.x,p.y,16,0,7);ctx.fill();
+    ctx.strokeStyle='#0a0e16';ctx.lineWidth=3;ctx.stroke();
+    if(p.imp){ctx.fillStyle='#0a0e16';ctx.beginPath();ctx.arc(p.x,p.y,5,0,7);ctx.fill();}
+    ctx.fillStyle='#9fb0c8';ctx.font='600 15px sans-serif';ctx.fillText(p.name,p.x,p.y-30);}
+}
+
+/* ---------- 会议 ---------- */
+const ov=document.getElementById('ov'),ovLog=document.getElementById('ovLog'),ovC=document.getElementById('ovC');
+let M=null;
+const slice=(p,a,b)=>p.log.filter(e=>e.t>=a&&e.t<=b);
+
+function openMeeting(reporter,body){
+  meeting=!0;ov.classList.add('show');ovLog.innerHTML='';ovC.innerHTML='';
+  document.getElementById('ovT').textContent=NM[body.id]+' 死了';
+  document.getElementById('ovS').textContent=body.room+' · 由 '+reporter.name+' 发现 · t='+t.toFixed(0)+'s';
+  let lsa=0;
+  P.filter(p=>p.alive).forEach(p=>p.log.forEach(e=>{if(e.saw.includes(body.id)&&e.t>lsa)lsa=e.t;}));
+  const win=[Math.max(0,lsa||body.t-14),+t.toFixed(1)];
+  M={body,reporter,win,susp:{},claim:null};
+  const alive=P.filter(p=>p.alive);
+  alive.forEach(p=>{M.susp[p.id]={};alive.forEach(q=>{if(q!==p)M.susp[p.id][q.id]=1;});});
+  const facts=[]; alive.filter(p=>!p.imp).forEach(a=>facts.push(read(a,body,win)));
+  M.facts=facts;
+  alive.filter(p=>!p.imp).forEach(a=>facts.forEach(f=>{const w=f.who===a.id?1:.75;
+    for(const k in f.score){if(+k===a.id)continue;M.susp[a.id][k]=(M.susp[a.id][k]||1)+f.score[k]*w;}}));
+  say('sys','死亡时间窗推定为 t='+win[0].toFixed(1)+'s – '+win[1].toFixed(1)+'s（最后一次有人看到 '+NM[body.id]+' 活着 → 尸体被发现）。');
+  const order=[reporter,...alive.filter(p=>p!==reporter&&!p.imp)].filter(p=>!p.imp);
+  let i=0;
+  const tick=()=>{ if(i<order.length){const a=order[i++],f=facts.find(x=>x.who===a.id);
+      say('','<b style="color:'+a.col+'">'+a.name+'</b>：'+f.line); setTimeout(tick,700);} else askPlayer();};
+  setTimeout(tick,600);
+}
+
+function read(a,body,win){            /* 规则版“读日记”，以后整段换成一次模型调用 */
+  const ev=slice(a,win[0],win[1]);
+  const score={},mine={},tkc={}; let inCrime=0,sawKill=null,sawVent=!1,lastWith=null;
+  ev.forEach(e=>{
+    if(e.kill)sawKill=e.kill.v; if(e.vent)sawVent=!0;
+    if(e.room===body.room)inCrime++;
+    (e.tk||[]).forEach(id=>tkc[id]=(tkc[id]||0)+1);
+    e.saw.forEach(id=>{mine[id]=(mine[id]||0)+1;
+      if(e.room===body.room&&id!==body.id)score[id]=(score[id]||0)+7/(ev.length||1);
+      if(e.saw.includes(body.id)&&id!==body.id)lastWith=id;});});
+  P.filter(p=>p.alive&&p!==a).forEach(p=>{
+    const r=(mine[p.id]||0)/(ev.length||1);
+    if(r>.55&&inCrime===0)score[p.id]=(score[p.id]||0)-7*r;
+    else if(r<.05)score[p.id]=(score[p.id]||0)+2.2;
+    if((tkc[p.id]||0)>=3)score[p.id]=(score[p.id]||0)-4;});
+  if(lastWith!==null)score[lastWith]=(score[lastWith]||0)+5;
+  if(sawKill!==null)score[0]=(score[0]||0)+120;
+  if(sawVent)score[0]=(score[0]||0)+120;
+  const cnt={};ev.forEach(e=>cnt[e.room]=(cnt[e.room]||0)+1);
+  const mainRoom=Object.keys(cnt).sort((x,y)=>cnt[y]-cnt[x])[0]||'走廊';
+  const withMe=Object.keys(mine).filter(k=>mine[k]/(ev.length||1)>.4).map(k=>NM[k]);
+  const busy=Object.keys(tkc).filter(k=>tkc[k]>=3).map(k=>NM[k]);
+  let line='我这段时间基本在'+mainRoom+(withMe.length?'，'+withMe.join('、')+'跟我一起。':'，一个人。');
+  if(busy.length)line+='看见 '+busy.join('、')+' 在做任务。';
+  if(sawKill!==null)line='我亲眼看见 紫 把 '+NM[sawKill]+' 放倒了。别投别人。';
+  else if(sawVent)line='我看见 紫 钻了通风口。就是他。';
+  else if(lastWith!==null&&lastWith!==body.id)line+='最后一次看到 '+NM[body.id]+' 活着的时候，'+NM[lastWith]+' 就在旁边。';
+  else if(a===M.reporter)line='尸体是我在'+body.room+'发现的。'+line;
+  return {who:a.id,score,mainRoom,mine,tkc,ev,line};
+}
+
+function askPlayer(){
+  say('sys','轮到你了。你说的每一句，都会被拿去和他们的日记对账。');
+  ovC.innerHTML='';
+  const btn=(txt,fn,w)=>{const b=document.createElement('button');b.innerHTML=txt;b.onclick=fn;
+    if(w)b.style.flexBasis='100%';ovC.appendChild(b);};
+  btn('我在… <span class="cd">报一个房间</span>',()=>{ovC.innerHTML='';
+    rooms.forEach(r=>btn(r.name,()=>claim(r.name)));btn('算了，我沉默',()=>claim(null),1);});
+  btn('我在做任务 <span class="cd">拿目击当证据</span>',()=>claimTask());
+  btn('反咬一口 <span class="cd">指认某人</span>',()=>{ovC.innerHTML='';
+    P.filter(p=>p.alive&&!p.imp).forEach(a=>btn(a.name,()=>accuse(a)));},1);
+}
+
+function claim(room){
+  ovC.innerHTML='';
+  if(!room){say('','<b style="color:#8663e0">紫(你)</b>：……');
+    P.filter(p=>p.alive&&!p.imp).forEach(a=>M.susp[a.id][0]+=2.5);
+    say('hit','沉默不是中立。四个人的怀疑度都往你这边挪了一点。');
+    return setTimeout(vote,900);}
+  M.claim='待在'+room;
+  say('','<b style="color:#8663e0">紫(你)</b>：我一直在'+room+'。');
+  let hit=0,ok=0;
+  M.facts.forEach(f=>{const a=P[f.who],ev=f.ev;
+    const elsewhere=ev.filter(e=>e.saw.includes(0)&&e.room!==room);
+    const there=ev.filter(e=>e.saw.includes(0)&&e.room===room).length;
+    const been=ev.filter(e=>e.room===room).length;
+    if(elsewhere.length>=2){M.susp[a.id][0]+=9;hit++;
+      say('hit','<b style="color:'+a.col+'">'+a.name+'</b>：不对。t='+elsewhere[0].t+'s 我在'+elsewhere[0].room+'看见你了。');}
+    else if(there>=2){M.susp[a.id][0]-=6;ok++;
+      say('ok','<b style="color:'+a.col+'">'+a.name+'</b>：这个我能作证，那会儿他确实在'+room+'。');}
+    else if(been>=4){M.susp[a.id][0]+=7;hit++;
+      say('hit','<b style="color:'+a.col+'">'+a.name+'</b>：我整段都在'+room+'，没见过你。');}
+    else M.susp[a.id][0]+=1;});
+  if(!hit&&!ok)say('sys','没人能证实，也没人能推翻。你活在证据的缝里。');
+  setTimeout(vote,1000);
+}
+function claimTask(){
+  ovC.innerHTML=''; M.claim='在做任务';
+  say('','<b style="color:#8663e0">紫(你)</b>：我一直在做任务，你们有人看见的。');
+  let ok=0;
+  M.facts.forEach(f=>{const a=P[f.who];
+    if((f.tkc[0]||0)>=3){M.susp[a.id][0]-=9;ok++;
+      say('ok','<b style="color:'+a.col+'">'+a.name+'</b>：确实，我看见他蹲在任务点上。');}
+    else{M.susp[a.id][0]+=4;
+      say('hit','<b style="color:'+a.col+'">'+a.name+'</b>：任务条这段时间一格都没动。你做的是哪个任务？');}});
+  if(!ok)say('sys','装样子要装在别人眼前。没人看见的任务，等于没做。');
+  setTimeout(vote,1000);
+}
+function accuse(tg){
+  ovC.innerHTML=''; M.claim='指认'+tg.name;
+  say('','<b style="color:#8663e0">紫(你)</b>：'+tg.name+'整段都没人说得清在哪，我投他。');
+  M.facts.forEach(f=>{const a=P[f.who]; if(a.id===tg.id)return;
+    const r=(f.mine[tg.id]||0)/(f.ev.length||1);
+    if(r>.5){M.susp[a.id][0]+=8;
+      say('hit','<b style="color:'+a.col+'">'+a.name+'</b>：不可能，'+tg.name+'那段时间一直在我旁边。你在乱咬。');}
+    else M.susp[a.id][tg.id]+=3;});
+  M.susp[tg.id][0]+=6;
+  setTimeout(vote,1000);
+}
+
+function vote(){
+  const alive=P.filter(p=>p.alive),votes={},lines=[];
+  alive.filter(p=>!p.imp).forEach(a=>{let best=null,bs=4.5;
+    for(const k in M.susp[a.id]) if(M.susp[a.id][k]>bs){bs=M.susp[a.id][k];best=+k;}
+    lines.push(a.name+' → '+(best===null?'弃票':NM[best]));
+    if(best!==null)votes[best]=(votes[best]||0)+1;});
+  say('sys','投票结果：');
+  const box=document.createElement('div');box.className='tallies';
+  lines.forEach(l=>{const s=document.createElement('span');s.className='tag';s.textContent=l;box.appendChild(s);});
+  ovLog.appendChild(box);
+  let out=null,mx=0,tie=!1;
+  for(const k in votes){if(votes[k]>mx){mx=votes[k];out=+k;tie=!1;}else if(votes[k]===mx)tie=!0;}
+  ovC.innerHTML='';
+  const b=document.createElement('button');b.style.flexBasis='100%';b.textContent='继续';
+  if(out===null||tie||mx<2)say('ok','票数不足或平票，没有人被抛出。');
+  else{P[out].alive=!1;
+    if(out===0){say('hit',NM[out]+' 被抛出飞船。');ovLog.appendChild(diaryBox());
+      return setTimeout(()=>end(!1,'他们把日记对上了，你被抛了出去。'),500);}
+    release(out);
+    say('hit',NM[out]+' 被抛出飞船。他不是内鬼 —— 任务总数没变，干活的人少了一个。');}
+  ovLog.appendChild(diaryBox());
+  b.onclick=close; ovC.appendChild(b);
+  ovLog.scrollTop=ovLog.scrollHeight;
+}
+function diaryBox(){
+  const w=document.createElement('div');
+  const a=P.filter(p=>p.alive&&!p.imp)[0]||P[1];
+  const f=M.facts.find(x=>x.who===a.id)||M.facts[0];
+  const payload={you:a.name,role:'crewmate',
+    body:{victim:NM[M.body.id],room:M.body.room,found_at:M.win[1]},
+    window:M.win, tasks_done:taskDone+'/'+taskTotal,
+    memory:(f?f.ev:[]).map(e=>({t:e.t,room:e.room,saw:e.saw.map(i=>NM[i]),
+      doing_task:(e.tk||[]).map(i=>NM[i]),dark:e.dark})),
+    heard:M.facts.map(x=>({from:NM[x.who],says:x.line})),
+    suspect_says:M.claim};
+  const d=document.createElement('details');
+  d.innerHTML='<summary style="cursor:pointer;color:#8493ab;font-size:12.5px;margin:6px 0">查看 '+a.name+' 的目击日记（也就是喂给模型的那段输入）</summary>';
+  const pre=document.createElement('pre');pre.className='diary';pre.textContent=JSON.stringify(payload,null,1);
+  const n=document.createElement('p');n.className='note';
+  n.textContent='现在是一段规则在读这份 JSON，输出 {发言, 投票}。把这两行换成一次模型调用，其余全不用动 —— 接口就是这份日记本身。';
+  d.appendChild(pre);d.appendChild(n);w.appendChild(d);return w;
+}
+function close(){ov.classList.remove('show');meeting=!1;killCD=Math.max(killCD,8);bodies=[];emg=0;
+  SPOT.forEach(s=>{if(!s.done)s.owner=-1;});
+  const c=rooms[1];
+  P.filter(p=>p.alive).forEach((p,i)=>{p.x=c.cx+(i-2)*40;p.y=c.cy+(i%2?24:-16);
+    p.path=[];p.mt=null;p.tt=0;p.doing=!1;p.fixing=!1;p.cur=null;});
+  if(P.filter(p=>p.alive&&!p.imp).length<=1)end(!0,'船员只剩一个了。刀完收工。');}
+function say(cls,html){const p=document.createElement('p');p.className='say '+cls;p.innerHTML=html;
+  ovLog.appendChild(p);ovLog.scrollTop=ovLog.scrollHeight;}
+function end(win,msg){if(over)return;over=!0;ov.classList.remove('show');
+  const T=document.getElementById('endT');
+  T.textContent=win?'内鬼获胜':'船员获胜'; T.style.color=win?'#cf4b3d':'#4fbf9a';
+  document.getElementById('endP').textContent=msg;
+  document.getElementById('endS').classList.add('show');}
+})();
+</script></body></html>
