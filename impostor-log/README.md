@@ -57,7 +57,33 @@ python -m http.server 8000
 开会时这份 JSON 原样喂给模型。会议结束后可以点「查看目击日记」展开看
 喂进去的原始输入。
 
-## 渲染
+## 渲染：3D 和 2D 两套
+
+右上角「3D / 2D」按钮切换，选择记在 localStorage 里。
+
+**游戏逻辑一行都没为 3D 改过。** 模拟仍然是 2D 的 `(x, y)`，3D 渲染器只是换一种
+呈现方式（`x → 世界 X`，`y → 世界 Z`，缩放 1/10）。所以信息隔离、目击日记、
+盯梢行为完全不受影响，2D 渲染器也完整保留着。
+
+three.js（r128，MIT）**内置在 `vendor/` 里，不走 CDN**——离线、双击本地文件、
+CDN 被墙都照常能开 3D。
+
+三层降级，一层都不能少：
+
+| 情况 | 行为 |
+|---|---|
+| three.js 拿不到 / 没有 WebGL | 静默退回 2D，3D 按钮自动隐藏 |
+| 帧率 < 24 | 自动关阴影、降像素比 |
+| 还是 < 24 | 退回 2D 并提示 |
+
+> 帧率低不只是不好看：主循环的 `dt` 封顶 0.05s，帧率一掉游戏会变成**慢动作**。
+> 所以跑不动必须降级，不能硬扛。
+
+3D 里的九个舱室各有主色调、灯带、程序化生成的墙和门洞（门洞是从 `corrH`/`corrV`
+的坐标算出来的，不是手摆的）。**断电在 3D 里是真的光照**：主光几乎全灭，
+玩家身上点一盏 PointLight。
+
+### 2D 渲染器
 
 静态地图（地板、墙、房名、通风口、暗角）一帧都不会变，所以**烘焙进离屏 canvas 画一次**，
 之后每帧只贴一张图 + 画动态层。既能塞进更多细节，也比每帧重画几十个矩形便宜——
@@ -149,7 +175,7 @@ python -m http.server 8000
 ```bash
 pip install playwright && playwright install chromium
 python tests/test_meeting.py     # 会议流程 / failover / 规则降级 / 行为层
-python tests/test_mobile.py      # 5 种手机平板视口：布局、触摸摇杆、键盘、主屏幕安装
+python tests/test_mobile.py      # 5 种视口 + 触摸 + 键盘 + 主屏幕安装 + 3D/2D 切换与降级
 ```
 
 自动拉起假 LLM 端点，验证三条路径：正常调用、主端点 500 切备用、无配置走规则。
@@ -163,6 +189,7 @@ python tests/test_mobile.py      # 5 种手机平板视口：布局、触摸摇�
 ```
 index.html                      游戏本体（唯一需要的文件）
 docs-original-rulesonly.html    接模型之前的纯规则版本，留作对照
+vendor/three.min.js             3D 渲染用，内置不走 CDN（three.js r128, MIT）
 manifest.webmanifest            「添加到主屏幕」用，游戏本身不依赖它
 icon-192/512.png                主屏幕图标（含 maskable）
 apple-touch-icon.png            iOS 主屏图标

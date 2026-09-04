@@ -7,6 +7,7 @@ on:
       - 'site/**'
       - 'impostor-log/index.html'
       - 'impostor-log/manifest.webmanifest'
+      - 'impostor-log/vendor/**'
       - 'docs/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
@@ -29,12 +30,13 @@ jobs:
 
       - name: 组装静态站点
         run: |
-          mkdir -p _site/impostor-log _site/docs
+          mkdir -p _site/impostor-log/vendor _site/docs
           cp site/index.html                _site/index.html
           cp impostor-log/index.html        _site/impostor-log/index.html
           # PWA：「添加到主屏幕」用的 manifest 和图标
           cp impostor-log/manifest.webmanifest _site/impostor-log/
           cp impostor-log/*.png                _site/impostor-log/
+          cp impostor-log/vendor/*            _site/impostor-log/vendor/
           cp docs/*.png                     _site/docs/
           # 没有构建步骤，Jekyll 也不要插手
           touch _site/.nojekyll

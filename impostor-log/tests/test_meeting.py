@@ -101,6 +101,11 @@ async def main() -> int:
                            ("无配置→规则降级", None)]:
             print(f"\n--- {label} ---")
             pg = await browser.new_page(viewport={"width": 420, "height": 880})
+            # 固定跑 2D：这个文件测的是会议流程和行为层，不是渲染器。
+            # 无 GPU 的 CI 里 3D 走软件渲染，帧率一低 dt 封顶就会让游戏变慢动作，
+            # 时序断言全部失真。渲染器由 test_mobile.py 单独覆盖。
+            await pg.add_init_script(
+                "try{localStorage.setItem('impostor_3d','0')}catch(e){}")
             errs: list[str] = []
             pg.on("pageerror", lambda e: errs.append(str(e)))
             r = await play(pg, cfg)

@@ -52,7 +52,10 @@ async def audit(browser, name, w, h, dpr):
 
     m = await pg.evaluate("""()=>{
         const de=document.documentElement;
-        const cv=document.querySelector('canvas').getBoundingClientRect();
+        // 2D / 3D 各有一块画布，量当前显示的那块
+        const el=[...document.querySelectorAll('.stage canvas')].find(c=>!c.hidden)
+                 ||document.querySelector('canvas');
+        const cv=el.getBoundingClientRect();
         const st=document.querySelector('#stick').getBoundingClientRect();
         const btns=[...document.querySelectorAll('.acts button')].map(e=>e.getBoundingClientRect());
         return {
@@ -62,9 +65,10 @@ async def audit(browser, name, w, h, dpr):
           stickIn: st.bottom<=innerHeight+1 && st.left>=0 && st.right<=innerWidth+1,
           btnsIn: btns.every(r=>r.bottom<=innerHeight+1 && r.right<=innerWidth+1),
           minBtn: Math.round(Math.min(...btns.map(r=>r.height))),
+          mode: document.getElementById('cv3').hidden?'2D':'3D',
         };}""")
 
-    print(f"\n--- {name} ({w}×{h}) ---")
+    print(f"\n--- {name} ({w}×{h}) · {m['mode']} ---")
     check(not m["hOver"], "没有横向溢出")
     # 画布要占到视口的合理比例，否则地图小到没法玩
     area = (m["cw"] * m["ch"]) / (w * h)
@@ -141,12 +145,65 @@ async def pwa_case(browser):
     await ctx.close()
 
 
+async def renderer_case(browser):
+    """3D 渲染器：能开、能切、切回 2D 后照常能玩；three.js 拿不到时静默退回。"""
+    print("\n--- 3D / 2D 渲染器 ---")
+    ctx = await browser.new_context(viewport={"width": 900, "height": 640}, has_touch=True)
+    pg = await ctx.new_page()
+    errs: list[str] = []
+    pg.on("pageerror", lambda e: errs.append(str(e)))
+    await pg.goto(f"http://127.0.0.1:{WEB_PORT}/index.html")
+    await pg.wait_for_timeout(1800)
+
+    st = await pg.evaluate("()=>({three:!!window.THREE,"
+                           "on:!document.getElementById('cv3').hidden,"
+                           "btn:document.getElementById('b3d').textContent,"
+                           "hidden:document.getElementById('b3d').hidden})")
+    check(st["three"], "内置的 three.js 加载成功（不依赖 CDN）")
+    check(st["on"] and st["btn"] == "3D", "默认进入 3D，按钮状态一致")
+    d = await pg.evaluate("()=>window.__dbg()")
+    check(d["r3"] is not None and d["r3"]["sun"] > 0, f"3D 光照在跑（sun={d['r3']['sun'] if d['r3'] else None}）")
+
+    await pg.click("#b3d"); await pg.wait_for_timeout(700)
+    st2 = await pg.evaluate("()=>({cv:!document.getElementById('cv').hidden,"
+                            "cv3:!document.getElementById('cv3').hidden,"
+                            "btn:document.getElementById('b3d').textContent})")
+    check(st2["cv"] and not st2["cv3"] and st2["btn"] == "2D", "能切回 2D，两块画布不会同时显示")
+    before = (await pg.evaluate("()=>window.__dbg()"))["me"]
+    await pg.keyboard.down("d"); await pg.wait_for_timeout(700); await pg.keyboard.up("d")
+    after = (await pg.evaluate("()=>window.__dbg()"))["me"]
+    check(abs(after[0] - before[0]) + abs(after[1] - before[1]) > 5, "切回 2D 后游戏照常能玩")
+    check(not errs, f"切换过程无 JS 异常{'：' + str(errs[:1]) if errs else ''}")
+    await ctx.close()
+
+    # three.js 拿不到时必须静默退回 2D，而不是白屏
+    ctx2 = await browser.new_context(viewport={"width": 900, "height": 640}, has_touch=True)
+    pg2 = await ctx2.new_page()
+    errs2: list[str] = []
+    pg2.on("pageerror", lambda e: errs2.append(str(e)))
+    await pg2.route("**/vendor/three.min.js", lambda r: asyncio.ensure_future(r.abort()))
+    await pg2.goto(f"http://127.0.0.1:{WEB_PORT}/index.html")
+    await pg2.wait_for_timeout(1500)
+    fb = await pg2.evaluate("()=>({cv:!document.getElementById('cv').hidden,"
+                            "btnHidden:document.getElementById('b3d').hidden,"
+                            "three:!!window.THREE})")
+    check(not fb["three"] and fb["cv"], "three.js 加载失败时自动退回 2D 渲染")
+    check(fb["btnHidden"], "3D 按钮自动隐藏，不给用户点一个坏功能")
+    b4 = (await pg2.evaluate("()=>window.__dbg()"))["me"]
+    await pg2.keyboard.down("s"); await pg2.wait_for_timeout(700); await pg2.keyboard.up("s")
+    a4 = (await pg2.evaluate("()=>window.__dbg()"))["me"]
+    check(abs(a4[0] - b4[0]) + abs(a4[1] - b4[1]) > 5, "退回 2D 后游戏完整可玩")
+    check(not errs2, f"降级过程无 JS 异常{'：' + str(errs2[:1]) if errs2 else ''}")
+    await ctx2.close()
+
+
 async def main() -> int:
     from playwright.async_api import async_playwright
     async with async_playwright() as pw:
         browser = await pw.chromium.launch()
         for name, w, h, dpr in DEVICES:
             await audit(browser, name, w, h, dpr)
+        await renderer_case(browser)
         await keyboard_case(browser)
         await pwa_case(browser)
         await browser.close()
